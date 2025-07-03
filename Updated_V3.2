@@ -1,0 +1,245 @@
+/**********
+ * Purpose:
+ *   Control of a robotic vehicle with obstacle avoidance capability.
+ *   The vehicle moves autonomously and avoids obstacles using
+ *   an ultrasonic sensor and contact switches.
+ * Hardware:
+ *   - Arduino microcontroller
+ *   - Ultrasonic sensor (Trig: A0, Echo: A1)
+ *   - Servo motor (Pin: 3) for rotating the ultrasonic sensor
+ *   - Two motors for movement (Pins: 5, 6, 10, 11)
+ *   - Two contact switches (Pins: 4, 8)
+ *   - Indicator LED (Pin: 13)
+ *   - Buzzer (Pin: 12)
+ * Software:
+ *   - Using the Ultrasonic library for controlling the ultrasonic sensor
+ *   - Using the Servo library for controlling the servo motor
+ *   - Implementation of movement functions (forward, backward, left, right, stop)
+ *   - Obstacle avoidance algorithm with environment scanning
+ * Limitations:
+ *   - Obstacle detection distance is limited to 10 centimeters
+ *   - The delay times for turns are fixed and may need adjustment
+ *     depending on the specific hardware
+ * Safety:
+ *   - The vehicle stops immediately when it detects obstacles
+ *   - Visual and auditory alerts are activated during obstacle detection
+ * Reference:
+ *   Author: Panagiotis Panagos
+ *   Version: 3.2
+ *   Date: 17 June 2025
+ *   Environment: Arduino IDE
+ **********/
+
+#include <Ultrasonic.h>
+#include <Servo.h>
+
+/* Pin definitions */
+const int motorR1 = 6;
+const int motorR2 = 5;
+const int motorL1 = 11;
+const int motorL2 = 10;
+const int servoPin = 3;
+const int rightSw = 8;
+const int leftSw = 4;
+const int led = 13;
+const int buzzer = 12;
+
+/* Sensor and actuator objects */
+Ultrasonic ultrasonic(A0, A1);
+Servo myservo;
+
+/* Servo positions and timing constants */
+const int SERVO_CENTER = 90;
+const int SERVO_LEFT = 0;
+const int SERVO_RIGHT = 180;
+const unsigned long SERVO_TRAVEL_MS = 350;
+
+/******** setup
+ * Purpose:
+ *   Initialize hardware interfaces and center the servo.
+ * Hardware:
+ *   Configures pins for motors, switches, LED, and buzzer.
+ * Software:
+ *   Attaches servo and sets initial position.
+ * Reference:
+ *   v3.2, Panagiotis Panagos, 17 June 2025.
+ ********/
+void setup() {
+  pinMode(motorR1, OUTPUT);
+  pinMode(motorR2, OUTPUT);
+  pinMode(motorL1, OUTPUT);
+  pinMode(motorL2, OUTPUT);
+
+  pinMode(leftSw, INPUT_PULLUP);
+  pinMode(rightSw, INPUT_PULLUP);
+
+  pinMode(led, OUTPUT);
+  pinMode(buzzer, OUTPUT);
+
+  myservo.attach(servoPin);
+  myservo.write(SERVO_CENTER);
+
+  delay(1500);  /* Provide adequate time for setting up the robot */
+}
+
+/******** loop
+ * Purpose:
+ *   Main control loop: read sensors and decide motion or obstacle handling.
+ * Software:
+ *   Calls forward() or handleObstacle() based on sensor input.
+ * Reference:
+ *   v3.2, Panagiotis Panagos, 17 June 2025.
+ ********/
+void loop() {
+  int distance = ultrasonic.Ranging(CM);
+  bool bumpLeft = digitalRead(leftSw) == LOW;
+  bool bumpRight = digitalRead(rightSw) == LOW;
+
+  if (distance <= 10 || bumpLeft || bumpRight) {
+    handleObstacle(distance, bumpLeft, bumpRight);
+  } else {
+    forward();
+  }
+}
+
+/******** handleObstacle
+ * Purpose:
+ *   Stop the vehicle and perform obstacle avoidance routine.
+ * Arguments:
+ *   dist - current distance reading in cm (int).
+ *   bumpL - left bumper state (bool).
+ *   bumpR - right bumper state (bool).
+ * Results:
+ *   Executes movement primitives to avoid obstacle.
+ * Software:
+ *   Scans environment and chooses direction with more space.
+ * Reference:
+ *   v3.2, Panagiotis Panagos, 17 June 2025.
+ ********/
+void handleObstacle(int dist, bool bumpL, bool bumpR) {
+  stop();
+  tone(buzzer, 500);
+  digitalWrite(led, HIGH);
+
+  int pos;
+  int leftDistance;
+  int rightDistance;
+
+  if (dist <= 10) {
+    for (pos = SERVO_LEFT; pos <= SERVO_RIGHT; pos++) {
+      myservo.write(pos);
+      delay(5);
+    }
+    rightDistance = ultrasonic.Ranging(CM);
+    delay(50);
+
+    for (pos = SERVO_RIGHT; pos >= SERVO_LEFT; pos--) {
+      myservo.write(pos);
+      delay(5);
+    }
+    leftDistance = ultrasonic.Ranging(CM);
+    delay(50);
+
+    myservo.write(SERVO_CENTER);
+    delay(SERVO_TRAVEL_MS);
+
+    if (leftDistance > rightDistance) {
+      backward(); delay(200);
+      left();     delay(300);
+    } else if (rightDistance > leftDistance) {
+      backward(); delay(200);
+      right();    delay(300);
+    } else {
+      backward(); delay(500);
+      right();    delay(100);
+    }
+
+  } else {
+    if (bumpL) {
+      backward(); delay(500);
+      right();    delay(250);
+    }
+    if (bumpR) {
+      backward(); delay(500);
+      left();     delay(250);
+    }
+  }
+
+  noTone(buzzer);
+  digitalWrite(led, LOW);
+}
+
+/******** backward
+ * Purpose:
+ *   Spin both motors to move vehicle backward.
+ * Results:
+ *   Sets motor pins for reverse motion.
+ * Reference:
+ *   v3.2, Panagiotis Panagos, 17 June 2025.
+ ********/
+void backward() {
+  digitalWrite(motorR1, HIGH);
+  digitalWrite(motorR2, LOW);
+  digitalWrite(motorL1, HIGH);
+  digitalWrite(motorL2, LOW);
+}
+
+/******** forward
+ * Purpose:
+ *   Spin both motors to move vehicle forward.
+ * Results:
+ *   Sets motor pins for forward motion.
+ * Reference:
+ *   v3.2, Panagiotis Panagos, 17 June 2025.
+ ********/
+void forward() {
+  digitalWrite(motorR1, LOW);
+  digitalWrite(motorR2, HIGH);
+  digitalWrite(motorL1, LOW);
+  digitalWrite(motorL2, HIGH);
+}
+
+/******** left
+ * Purpose:
+ *   Rotate vehicle to the left.
+ * Results:
+ *   Sets motor pins for left turn.
+ * Reference:
+ *   v3.2, Panagiotis Panagos, 17 June 2025.
+ ********/
+void left() {
+  digitalWrite(motorR1, LOW);
+  digitalWrite(motorR2, HIGH);
+  digitalWrite(motorL1, HIGH);
+  digitalWrite(motorL2, LOW);
+}
+
+/******** right
+ * Purpose:
+ *   Rotate vehicle to the right.
+ * Results:
+ *   Sets motor pins for right turn.
+ * Reference:
+ *   v3.2, Panagiotis Panagos, 17 June 2025.
+ ********/
+void right() {
+  digitalWrite(motorR1, HIGH);
+  digitalWrite(motorR2, LOW);
+  digitalWrite(motorL1, LOW);
+  digitalWrite(motorL2, HIGH);
+}
+
+/******** stop
+ * Purpose:
+ *   Stop both motors immediately.
+ * Results:
+ *   Sets all motor control pins LOW.
+ * Reference:
+ *   v3.2, Panagiotis Panagos, 17 June 2025.
+ ********/
+void stop() {
+  digitalWrite(motorR1, LOW);
+  digitalWrite(motorR2, LOW);
+  digitalWrite(motorL1, LOW);
+  digitalWrite(motorL2, LOW);
+}
