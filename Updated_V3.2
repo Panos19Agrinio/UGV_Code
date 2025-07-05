@@ -126,14 +126,14 @@ void handleObstacle(int dist, bool bumpL, bool bumpR) {
   int rightDistance;
 
   if (dist <= 10) {
-    for (pos = SERVO_LEFT; pos <= SERVO_RIGHT; pos++) {
+    for (pos = SERVO_LEFT; pos < SERVO_RIGHT; pos++) {
       myservo.write(pos);
       delay(5);
     }
     rightDistance = ultrasonic.Ranging(CM);
     delay(50);
 
-    for (pos = SERVO_RIGHT; pos >= SERVO_LEFT; pos--) {
+    for (pos = SERVO_RIGHT; pos > SERVO_LEFT; pos--) {
       myservo.write(pos);
       delay(5);
     }
